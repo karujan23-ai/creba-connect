@@ -221,12 +221,32 @@ flutter run
 
 `flutter run` starts the app on the connected phone or running emulator. To pick a device: `flutter devices`, then `flutter run -d <device id>`.
 
-### Running without a Firebase project (local emulators)
+### Shortcuts on Windows
 
-The app can run against the Firebase Local Emulator Suite, which needs no Firebase account and never touches real data.
+The `tools` folder has double-click helpers for this laptop's setup:
+
+| File | What it does |
+|---|---|
+| `tools\start-phone.cmd` | starts the virtual Android phone |
+| `tools\run-app.cmd` | builds and runs the app on the phone |
+| `tools\firebase-sign-in.cmd` | signs the Firebase CLI in |
+| `tools\push-to-github.cmd` | uploads the project to GitHub |
+| `tools\run-e2e.ps1` | runs the end-to-end test |
+
+### Installable APK
 
 ```bash
-firebase emulators:start --only auth,firestore --project demo-creba-connect
+flutter build apk --release
+```
+
+The file appears at `build\app\outputs\flutter-apk\app-release.apk` and can be copied to any Android phone. It is signed with the debug key, which is fine for a demo but not for the Play Store.
+
+### Running against the local emulators
+
+The app can run against the Firebase Local Emulator Suite, a pretend Firebase on your own computer. Nothing done in this mode touches the real project's data, which makes it the safe place for experiments and automated tests.
+
+```bash
+firebase emulators:start --only auth,firestore
 ```
 
 Then, in a second terminal:
@@ -262,6 +282,17 @@ Every line except "Visual Studio" should have a tick. Visual Studio is only need
 ---
 
 ## Firebase setup
+
+This repository is already connected to the Firebase project **`creba-connect`** (Firestore in `asia-south1`, Email/Password sign-in enabled, security rules deployed). The steps below are what was done, and what anyone would do to connect the code to a project of their own.
+
+Most of it can also be done from the command line, as it was here:
+
+```bash
+firebase firestore:databases:create "(default)" --location=asia-south1
+firebase deploy --only firestore:rules,auth
+```
+
+(`firebase.json` lists Email/Password under `auth.providers`, so `deploy --only auth` switches it on.)
 
 1. Open the [Firebase Console](https://console.firebase.google.com/), choose **Create a project**, name it, and finish (Google Analytics is not needed).
 2. **Authentication** → *Get started* → *Sign-in method* → **Email/Password** → enable → *Save*.

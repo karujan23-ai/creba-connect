@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "511107698736",
+    "project_id": "creba-connect",
+    "storage_bucket": "creba-connect.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:511107698736:android:4388d75c1872cd008dddf5",
+        "android_client_info": {
+          "package_name": "com.creba.creba_connect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDeiC2mYTfFhxVlgElUmdMzCAvxE0Sls4s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

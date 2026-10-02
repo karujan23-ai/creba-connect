@@ -3,10 +3,35 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
+  "auth": {
+    "providers": {
+      "emailPassword": true
+    }
+  },
   "emulators": {
     "auth": { "port": 9099, "host": "0.0.0.0" },
     "firestore": { "port": 8080, "host": "0.0.0.0" },
     "ui": { "enabled": true, "port": 4000 },
     "singleProjectMode": true
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "creba-connect",
+          "appId": "1:511107698736:android:4388d75c1872cd008dddf5",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "creba-connect",
+          "configurations": {
+            "android": "1:511107698736:android:4388d75c1872cd008dddf5",
+            "web": "1:511107698736:web:94c9446d76e58bec8dddf5"
+          }
+        }
+      }
+    }
   }
 }

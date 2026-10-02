@@ -15,7 +15,9 @@ Tip: run the app on the emulator for one account and on your phone (or Chrome) f
 | Security rules | start the emulators, then `npm test` inside `rules-test` | all tests pass |
 | Full journey | start the emulators and an Android emulator, then `flutter test integration_test/app_test.dart --dart-define=USE_FIREBASE_EMULATOR=true` | "All tests passed!" |
 
-Starting the emulators: `firebase emulators:start --only auth,firestore --project demo-creba-connect`
+Starting the emulators: `firebase emulators:start --only auth,firestore`
+
+The emulators are a pretend Firebase running on your laptop. The automated tests only ever use them, never the real project's data.
 
 ---
 

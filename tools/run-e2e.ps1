@@ -1,7 +1,7 @@
 # Runs the end-to-end test on a running Android emulator.
 #
 # Before running this, start the Firebase emulators in another window:
-#   firebase emulators:start --only auth,firestore --project demo-creba-connect
+#   firebase emulators:start --only auth,firestore
 
 $ErrorActionPreference = 'Continue'
 $env:JAVA_HOME = 'C:\Program Files\Android\Android Studio\jbr'

@@ -2,7 +2,7 @@
 // Firebase Local Emulator Suite (never against real data).
 //
 // How to run it:
-//   1. Start the emulators:   firebase emulators:start --only auth,firestore --project demo-creba-connect
+//   1. Start the emulators:   firebase emulators:start --only auth,firestore
 //   2. Start an Android emulator.
 //   3. flutter test integration_test/app_test.dart --dart-define=USE_FIREBASE_EMULATOR=true
 //
@@ -20,11 +20,11 @@ import 'package:creba_connect/widgets/app_text_field.dart';
 import 'package:creba_connect/widgets/category_chip.dart';
 import 'package:creba_connect/widgets/layout.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-const _project = 'demo-creba-connect';
 const _host = '10.0.2.2'; // the computer, as seen from the Android emulator
 const _password = 'test-password-1';
 
@@ -36,11 +36,18 @@ void main() {
     timeout: const Timeout(Duration(minutes: 20)),
     (tester) async {
       // ------------------------------------------------ a clean start
-      await _emulator('DELETE',
-          'http://$_host:8080/emulator/v1/projects/$_project/databases/(default)/documents');
-      await _emulator(
-          'DELETE', 'http://$_host:9099/emulator/v1/projects/$_project/accounts');
       await FirebaseBootstrap.initialize();
+      // Refuse to run against real data: this test wipes the database.
+      expect(
+        const bool.fromEnvironment('USE_FIREBASE_EMULATOR'),
+        isTrue,
+        reason: 'Run with --dart-define=USE_FIREBASE_EMULATOR=true',
+      );
+      final project = Firebase.app().options.projectId;
+      await _emulator('DELETE',
+          'http://$_host:8080/emulator/v1/projects/$project/databases/(default)/documents');
+      await _emulator(
+          'DELETE', 'http://$_host:9099/emulator/v1/projects/$project/accounts');
       await FirebaseAuth.instance.signOut();
 
       const brandName = 'Test Threads';
@@ -341,7 +348,7 @@ void main() {
       final adminUid = FirebaseAuth.instance.currentUser!.uid;
       await _emulator(
         'PATCH',
-        'http://$_host:8080/v1/projects/$_project/databases/(default)/documents'
+        'http://$_host:8080/v1/projects/$project/databases/(default)/documents'
             '/users/$adminUid?updateMask.fieldPaths=role',
         body: {
           'fields': {
