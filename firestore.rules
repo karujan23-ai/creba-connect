@@ -1,0 +1,327 @@
+rules_version = '2';
+
+// CreBa Connect — Firestore Security Rules
+//
+// These rules run on Google's servers. They are the real protection for the
+// data: even someone who rewrote the app could not get past them.
+//
+// The default is "deny". Nothing below uses `allow read, write: if true`.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------ helpers
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // True when the signed-in user's UID equals `uid`.
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function userDoc() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    // The role stored in the signed-in user's own account record.
+    function myRole() {
+      return get(userDoc()).data.role;
+    }
+
+    // Admin status comes from Firestore, where only an admin (or the
+    // Firebase Console) can write it. It is never taken from the app.
+    function isAdmin() {
+      return signedIn() && exists(userDoc()) && myRole() == 'admin';
+    }
+
+    // The fields this write would change.
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    // True when the write only adds exactly 1 to a single counter field.
+    function addsOneTo(field) {
+      return changedKeys().hasOnly([field])
+        && request.resource.data[field] == resource.data[field] + 1;
+    }
+
+    // True when the write only moves a single counter up or down by 1.
+    function nudges(field) {
+      return changedKeys().hasOnly([field])
+        && (request.resource.data[field] == resource.data[field] + 1
+         || request.resource.data[field] == resource.data[field] - 1);
+    }
+
+    // ------------------------------------------------------------- users
+    // The account record. It holds the role, so it is locked down hardest.
+
+    match /users/{uid} {
+      // Only you (and admins) can read your email and phone number.
+      allow read: if isOwner(uid) || isAdmin();
+
+      // You can create only your own record, and only as creator or brand.
+      // Nobody can register themselves as admin.
+      allow create: if isOwner(uid)
+        && request.resource.data.role in ['creator', 'brand']
+        && request.resource.data.isActive == true;
+
+      // You can edit your own record but can never change your role or
+      // un-suspend yourself. Admins can change anything.
+      allow update: if isAdmin()
+        || (isOwner(uid)
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.isActive == resource.data.isActive);
+
+      allow delete: if isAdmin();
+    }
+
+    // --------------------------------------------------- creatorProfiles
+    // Document ID = the creator's UID.
+
+    match /creatorProfiles/{uid} {
+      allow read: if signedIn();
+
+      allow create: if isAdmin() || (isOwner(uid) && myRole() == 'creator');
+
+      // The owner edits their profile but cannot touch the counters or the
+      // admin-controlled boost. Any signed-in user may add a view or a save.
+      allow update: if isAdmin()
+        || (isOwner(uid)
+            && !changedKeys().hasAny(['viewCount', 'saveCount', 'boostedUntil', 'isDemo']))
+        || (signedIn() && (addsOneTo('viewCount') || nudges('saveCount')));
+
+      allow delete: if isOwner(uid) || isAdmin();
+    }
+
+    // ----------------------------------------------------- brandProfiles
+    // Document ID = the brand's UID.
+
+    match /brandProfiles/{uid} {
+      allow read: if signedIn();
+
+      // A new brand always starts as "pending".
+      allow create: if isAdmin()
+        || (isOwner(uid)
+            && myRole() == 'brand'
+            && request.resource.data.verificationStatus == 'pending');
+
+      // A brand can never mark itself verified. The only status change it
+      // can make is back to "pending" (when it resubmits its details).
+      allow update: if isAdmin()
+        || (isOwner(uid)
+            && !changedKeys().hasAny(['viewCount', 'saveCount', 'isDemo'])
+            && (request.resource.data.verificationStatus == resource.data.verificationStatus
+                || request.resource.data.verificationStatus == 'pending'))
+        || (signedIn() && (addsOneTo('viewCount') || nudges('saveCount')));
+
+      allow delete: if isOwner(uid) || isAdmin();
+
+      // PAN details. Private: only the brand itself and admins.
+      match /private/{document} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+    }
+
+    // ------------------------------------------------------- hiringPosts
+
+    match /hiringPosts/{postId} {
+      // The "verified" badge stored on a post must match the brand's real
+      // status. getAfter() reads the brand as it will be once this write
+      // (or batch of writes) finishes.
+      function brandIsVerified(brandId) {
+        return getAfter(/databases/$(database)/documents/brandProfiles/$(brandId))
+          .data.verificationStatus == 'verified';
+      }
+
+      allow read: if signedIn();
+
+      // Only a brand can create a post, and only under its own UID.
+      allow create: if isAdmin()
+        || (isOwner(request.resource.data.brandId)
+            && myRole() == 'brand'
+            && request.resource.data.brandVerified
+                == brandIsVerified(request.resource.data.brandId)
+            && request.resource.data.viewCount == 0
+            && request.resource.data.applicationCount == 0);
+
+      // Only the brand that owns the post can edit it, and it cannot move
+      // the post to another brand, change its counters or promote itself.
+      allow update: if isAdmin()
+        || (isOwner(resource.data.brandId)
+            && !changedKeys().hasAny(
+                 ['brandId', 'viewCount', 'applicationCount', 'promotedUntil', 'isDemo'])
+            && request.resource.data.brandVerified == brandIsVerified(resource.data.brandId))
+        || (signedIn() && (addsOneTo('viewCount') || addsOneTo('applicationCount')));
+
+      allow delete: if isOwner(resource.data.brandId) || isAdmin();
+    }
+
+    // ------------------------------------------ creatorAvailabilityPosts
+
+    match /creatorAvailabilityPosts/{postId} {
+      allow read: if signedIn();
+
+      allow create: if isAdmin()
+        || (isOwner(request.resource.data.creatorId) && myRole() == 'creator');
+
+      allow update: if isAdmin()
+        || (isOwner(resource.data.creatorId)
+            && request.resource.data.creatorId == resource.data.creatorId);
+
+      allow delete: if isOwner(resource.data.creatorId) || isAdmin();
+    }
+
+    // ------------------------------------------------------ applications
+    // Document ID = jobId + "_" + creatorId, so one creator can apply to a
+    // job only once.
+
+    match /applications/{applicationId} {
+      // Only the creator who applied, the brand that owns the job, and admins.
+      allow read: if signedIn()
+        && (resource.data.creatorId == request.auth.uid
+            || resource.data.brandId == request.auth.uid
+            || isAdmin());
+
+      // A creator can apply only as themselves, and the application must
+      // start in the "applied" stage and point at the real owner of the job.
+      allow create: if isOwner(request.resource.data.creatorId)
+        && myRole() == 'creator'
+        && applicationId == request.resource.data.jobId + '_' + request.auth.uid
+        && request.resource.data.status == 'applied'
+        && request.resource.data.brandId
+            == get(/databases/$(database)/documents/hiringPosts/$(request.resource.data.jobId))
+                 .data.brandId;
+
+      allow update: if isAdmin()
+        // The brand moves the application through the stages.
+        || (isOwner(resource.data.brandId)
+            && changedKeys().hasOnly(['status', 'updatedAt'])
+            && request.resource.data.status
+                 in ['shortlisted', 'discussion', 'selected', 'rejected'])
+        // The creator can withdraw, or re-apply after withdrawing, but
+        // cannot overturn the brand's decision.
+        || (isOwner(resource.data.creatorId)
+            && changedKeys().hasOnly(['status', 'updatedAt', 'message', 'proposedRate'])
+            && request.resource.data.status in ['applied', 'withdrawn']
+            && resource.data.status in ['applied', 'shortlisted', 'discussion', 'withdrawn']
+            && (request.resource.data.status == 'withdrawn'
+                || resource.data.status == 'withdrawn'));
+
+      allow delete: if isAdmin();
+    }
+
+    // ----------------------------------------------------- conversations
+    // Document ID = the two UIDs, sorted and joined.
+
+    match /conversations/{conversationId} {
+      // Only the two people in a conversation can see it.
+      allow read: if signedIn() && request.auth.uid in resource.data.participants;
+
+      // You must be one of the two participants, and the document ID must
+      // really be made from those two UIDs.
+      allow create: if signedIn()
+        && request.auth.uid in request.resource.data.participants
+        && request.resource.data.participants.size() == 2
+        && conversationId == request.resource.data.participants[0]
+             + '_' + request.resource.data.participants[1];
+
+      allow update: if signedIn()
+        && request.auth.uid in resource.data.participants
+        && request.resource.data.participants == resource.data.participants;
+
+      match /messages/{messageId} {
+        function participants() {
+          return getAfter(
+            /databases/$(database)/documents/conversations/$(conversationId)
+          ).data.participants;
+        }
+
+        allow read: if signedIn() && request.auth.uid in participants();
+
+        // You can only send messages as yourself, to the other participant.
+        allow create: if signedIn()
+          && request.resource.data.senderId == request.auth.uid
+          && request.auth.uid in participants()
+          && request.resource.data.receiverId in participants();
+
+        // The receiver may mark a message as read. Nothing else can change.
+        allow update: if isOwner(resource.data.receiverId)
+          && changedKeys().hasOnly(['read']);
+      }
+    }
+
+    // ----------------------------------------------------- notifications
+
+    match /notifications/{notificationId} {
+      // You can only read, mark and delete your own notifications.
+      allow read, delete: if isOwner(resource.data.recipientId);
+      allow update: if isOwner(resource.data.recipientId)
+        && changedKeys().hasOnly(['read']);
+
+      // You can only send a notification in your own name.
+      allow create: if isOwner(request.resource.data.senderId);
+    }
+
+    // --------------------------------------------------------- favorites
+
+    match /favorites/{favoriteId} {
+      allow read, delete: if isOwner(resource.data.userId);
+      allow create: if isOwner(request.resource.data.userId)
+        && favoriteId == request.auth.uid + '_' + request.resource.data.targetId;
+    }
+
+    // ----------------------------------------------------------- reports
+
+    match /reports/{reportId} {
+      // Anyone signed in can file a report; only admins can read and act.
+      allow create: if isOwner(request.resource.data.reporterId)
+        && request.resource.data.status == 'open';
+      allow read, update, delete: if isAdmin();
+    }
+
+    // -------------------------------------------------------- promotions
+
+    match /promotions/{promotionId} {
+      allow read: if isOwner(resource.data.ownerId) || isAdmin();
+
+      // A user can only *request* a promotion. It can never be created
+      // already active, so the app cannot grant itself a paid feature.
+      allow create: if isOwner(request.resource.data.ownerId)
+        && request.resource.data.status == 'requested';
+
+      // Activating or declining is an admin (later: payment backend) action.
+      allow update: if isAdmin();
+
+      // A user may cancel a request that is still waiting.
+      allow delete: if isAdmin()
+        || (isOwner(resource.data.ownerId) && resource.data.status == 'requested');
+    }
+
+    // ---------------------------------------- subscriptions and payments
+    // Users can see their own. Only an admin or a payment backend writes.
+
+    match /subscriptions/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isOwner(resource.data.userId) || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // -------------------------------------------- categories, admin logs
+
+    match /categories/{name} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /adminLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.adminId == request.auth.uid;
+    }
+  }
+}
