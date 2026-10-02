@@ -196,13 +196,13 @@ The quickest demonstration of all four CRUD operations is the brand's **Opportun
 
 ## Screenshots
 
-Add screenshots to `docs/screenshots/` and link them here.
-
-| Sign in | Creator home | Opportunity | Brand discover | Dark mode |
+| Sign in | Sign up | Discover feed | Opportunity | Dark mode |
 |---|---|---|---|---|
-| *(add)* | *(add)* | *(add)* | *(add)* | *(add)* |
+| <img src="docs/screenshots/sign-in.png" width="170"> | <img src="docs/screenshots/sign-up.png" width="170"> | <img src="docs/screenshots/discover.png" width="170"> | <img src="docs/screenshots/opportunity.png" width="170"> | <img src="docs/screenshots/sign-in-dark.png" width="170"> |
 
-To capture one from a running emulator:
+The feed and opportunity screens show the app's built-in sample data, which is fictional.
+
+To capture more from a running emulator:
 
 ```bash
 adb exec-out screencap -p > docs/screenshots/home.png
@@ -394,13 +394,15 @@ There is deliberately no "register as admin".
 
 ### Demo accounts
 
-Create these yourself with the app's Sign up screen, then fill in the table for whoever marks the project.
+These accounts exist in the live `creba-connect` project.
 
-| Role | Email | Password |
+| Role | Email | Name in the app |
 |---|---|---|
-| Creator | *(add)* | *(add)* |
-| Brand | *(add)* | *(add)* |
-| Admin | *(add)* | *(add)* |
+| Creator | `rujan@gmaiil.com` | Rujan |
+| Brand | `fff@gmail.com` | Glamco |
+| Admin | `admin@gmail.com` | Admin |
+
+Passwords are deliberately **not** written in this public repository: anyone who found them could sign in as the admin and delete data. They are given to the examiner separately with the submission. Anyone can also simply register a new creator or brand account in the app.
 
 ### Sample data
 
